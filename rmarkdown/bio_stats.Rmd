@@ -10,7 +10,7 @@ output:
     toc_depth: 3
     number_sections: false
     theme: lumen
-    css: rmarkdown/www/css/master.css
+    css: www/css/master.css
     highlight: default
     fig_caption: yes
 ---
@@ -27,16 +27,13 @@ To illustrate some commonly statistical procedures in biology a few near-real wo
 This dataset is based on the hypothesis that the deletion of a gene (geneX) will alter the growth of endometrial cancer cells. To test this, two cell lines (AN3CA and EM-E6/E7-hTERT) were transfected with one of three siRNA, all targeting geneX. After transfection, proliferation (cell metabolism) of each experimental condition was measured by a MTT assay. These experiments were repeated in triplicate across three weeks.
 
 ## Chick weights on different diets
-This is a dataset that is available through an R package `chickwts` that measure the weight of different chicks on different feeds. 
+This is a dataset that is avaliable through an R package `chickwts` that measure the weight of different chicks on different feeds. 
 
 ## Novel therapies: blood haemoglobin
 This is a hypothetical dataset made to compare several treatments to standards care. The change in blood haemoglobin from baseline was recorded for 10 individuals randomly assigned to either standard care or one of six novel therapies (named DrugA-DrugF).
 
-## Birth weights
-A dataset of birth weights collect in 1986 at Baystate Medical center. The dataset contains nine additional variables about the mother and child. The data (`birthwt`) is accessible through the `MASS` package. 
-
 # R 
-This is a designed to be a simple guide to performing statistical analysis in R. There will be some statistical theory but the purpose is to show how statistical tests can be executed in R and how to display these results. 
+This is a desgined to be a simple guide to performing statistical analysis in R. There will be some statistical theory but the purpose is to show how statistical tests can be executed in R and how to display these results. 
 
 For those not familiar with R, R is a statistical language which is useful for more complex statistical procedures and presenting data. For the most part, this guide will have provide simple examples and "how-tos". A major challenge is often "wrangling" data into a format so that a function can be executed. For data wrangling, I will try use the latest `tidyverse` syntax. Alternatively, it is possible to 'wrangle'/organise data in excel before importing into R.
 
@@ -56,23 +53,17 @@ library(data.table)
 ## Extra stats package
 library(rstatix) ## used to help format stats into dfs for ggplot
 library(DescTools) ## For Dunnett's test
-library(epitools) ##
-library(epiR) ## For 2x2 contigency table etc
-library(mlbench)
-library(pROC) ## For ROC curves
-library(plotROC) ## For 'nicer' plotting
 
 ## Packages for plotting and table outputs
 library(ggplot2)
 library(ggsci)
 library(ggpubr)
-library(ggrepel)
 library(cowplot)
 library(kableExtra) ## used for to make nicer looking tables
 ```
 
 ## Tidyverse syntax
-Tidyverse (`tidyr`, `dpylr`) has a unique syntax/functionality compared to base R that allows the output of one function to be 'piped' into a second function. Piping is implemented with by the pipe function (`%>%`). As a simple explanation, lets assume a user whats to exclude rows based on some term and then summarise that data. This can be achieved by piping, or by storing the outputs of each function, I'll use the mtcars dataset to demonstrate. 
+Tidyverse (`tidyr`, `dpylr`) has a unique syntax/funcationality compared to base R that allows the output of one function to be 'piped' into a second function. Piping is implemented with by the pipe function (`%>%`). As a simple explaination, lets assume a user whats to exclude rows based on some term and then summarise that data. This can be achieved by piping, or by storing the ouputs of each function, I'll use the mtcars dataset to demonstrate. 
 ```{r tidyr}
 library(tidyverse)
 ## Tidyverse with piping
@@ -93,11 +84,7 @@ Note: The function I used are all from the tidyverse world, this just illustrate
 R can phrase several file types, the easiest are flat files (e.g. tab-delimited text files or comma-separated values files). I have uploaded several files to a github which you can download and import them into R. As most experimental data collected is often stored in excel, I have used a package `openxlsx` which has the ability to read individual excel sheets. 
 
 
-```{r quite, echo=F}
-library(openxlsx)
-```
-
-```{r ReadData, eval=T}
+```{r ReadData, eval=F}
 ## Ensure the path to data is correct
 sheetNames<-getSheetNames("Data/DummyData_MTT.xlsx") ## Gives you a list of sheetNames in a given excel workbook
 
@@ -109,15 +96,3 @@ Exp1 <- read.xlsx("Data/DummyData_MTT.xlsx", sheet=sheetNames[1]) # [1] denotes 
 KD_data<-lapply(sheetNames,function(i) read.xlsx("Data/DummyData_MTT.xlsx", sheet=i))
 names(KD_data) <- c(paste("Exp",1:3, sep=""), 'normalised')
 ```
-
-
-**Understanding data structure** 
-To quickly assese the structure of an R object we can use the function `str()`.
-
-```{r KDdata_str, warning=F, echo=F}
-## Structure of list
-str(KD_data)
-```
-
-
-The output of which describes the class (in this case a `list`), and the class of each sub-structure (e.g. each item in the list is a `data.frame`, each column of that data frame is either `chr` or `num`). This also provide the length/dimmensions of the each element (e.g. a list of 4 items, data.frame of 6 rows (obs) and 7 columns (variables)). Lastly, it does preview the first few values for each column. 

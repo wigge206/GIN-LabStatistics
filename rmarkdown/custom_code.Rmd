@@ -1,0 +1,26 @@
+---
+title: "Custom code"
+output:
+  bookdown::html_document2:
+    toc: true
+    toc_float: true
+    toc_collapsed: true
+    toc_depth: 3
+    number_sections: false
+    theme: lumen
+    css: www/css/master.css
+    highlight: default
+    fig_caption: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, comment=NA, fig.align = 'center')
+```
+
+# Boxplot function
+A ggplot function that changes some parameters that were universal to boxplots used throughout
+```{r bxplot_function, eval=FALSE}
+bxplot <- function(...){ggplot(...)+geom_boxplot(width=0.3, size=1, fatten=1, colour="grey70") +
+  geom_point(colour="steelblue", size=1.2, alpha=0.5) +
+  theme_bw(base_size=12)}
+```

@@ -24,6 +24,15 @@
        url('../fonts/roboto-slab-v12-latin-regular.svg#\1') format('svg'); /* Legacy iOS */
 }
 
+.MathJax_CHTML {
+    font-size: 1.2em !important;
+}
+
+
+.MathJax {
+font-size: 1.1em !important;
+}
+
 body {
   font-family: 'Roboto', sans-serif;
   }
@@ -109,6 +118,10 @@ ol.matched{
 ul.matched{
   line-height: 1.5;
   font-size:1.15em;
+}
+
+tfoot {
+  font-size: 80%;
 }
 
 div.warning{
