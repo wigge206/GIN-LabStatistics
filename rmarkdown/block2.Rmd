@@ -1,0 +1,339 @@
+---
+title: "2x2 Tables, Chi-Squared and ROC Curves"
+output:
+  bookdown::html_document2:
+    toc: true
+    toc_float: true
+    toc_collapsed: true
+    toc_depth: 3
+    number_sections: false
+    theme: lumen
+    css: www/css/master.css
+    highlight: default
+    fig_caption: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, comment=NA, fig.align = 'center')
+```
+
+
+```{r datasets, results='hide',error=FALSE, warning=FALSE, message=FALSE,echo=F}
+## Read excelsheets
+library(openxlsx)
+
+## Packages used for 'data wrangling'
+library(tidyverse)
+library(data.table)
+
+## Extra stats package
+library(rstatix) ## used to help format stats into dfs for ggplot
+library(DescTools) ## For Dunnett's test
+library(epitools)
+library(epiR)
+library(mlbench)
+library(pROC) ## For ROC curves
+
+## Packages for plotting and table outputs
+library(ggplot2)
+library(ggsci)
+library(ggpubr)
+library(ggrepel)
+library(cowplot)
+library(kableExtra) ## used for to make nicer looking tables
+```
+
+
+```{r global_functions, echo=FALSE}
+bxplot <- function(...){ggplot(...)+geom_boxplot(width=0.4, size=1, fatten=1, colour="grey70") +
+  geom_point(colour="steelblue", size=1.2, alpha=0.5) +
+  theme_bw(base_size=14)}
+
+p.siginf<- function(vec){
+  out<-c()
+  for(i in 1:length(vec)){
+    if(vec[i] < 0.001){
+      out <- c(out, "***")
+    }else if( vec[i] < 0.01){
+      out <- c(out, "**")
+    } else if(vec[i] <0.05){
+      out <- c(out, "*")
+    }else{
+      out <- c(out, "ns")
+    }
+  }     
+  return(out)
+}
+```
+
+Two-by-two tables (also known as contingency table or confusion matrices) are simply tables that bin (classify) events based on two categories. These table can be used to display frequencies of events for two given categorical variables and can aid in determining probabilities of events. Categorical data analyses typically evaluation the proportions of data rather than summaries such as means or medians.
+
+For example we can count the numbers of people with a outcome based on exposure (Table \@ref(tab:2by2))
+
+
+```{r 2by2, echo=F}
+data.frame(C1=rep('Exposure',3), C2 = c("Yes","No", "Totals"), plus=c('A', 'C', "A+C"), minus=c('B', 'D',"C+D"), Totals = c("A+B", "C+D", "N")) %>%
+  kbl(col.names=c("","", "Yes","No", "Totals"), caption = "2x2 contingency table",align = 'c') %>% 
+  kable_classic(html_font = "Cambria", font_size=16) %>% 
+  collapse_rows(columns=1) %>% add_header_above(c("","", "Outcome" =2, "")) 
+```
+
+Similarly, we can used a two-by-two table to inspect the accuracy of a dignostic test (Table \@ref(tab:2by2di)). By stratifying disease outcomes by diagnostic test result. From this information we can caluclate the sensitivity, specificity, positive predictive (PPV) and negative predictive values (NPV).
+
+
+```{r 2by2di, echo=F}
+data.frame(C1=rep('Test',3), C2 = c("Yes","No", "Totals"), plus=c('True Positive', 'False Negative', "Number with disease"), minus=c('False Positives', 'True negatives',"Number without disease"), Totals = c("Number who test positive", "Number who test negative", "N")) %>%
+  kbl(col.names=c("","", "Yes","No", "Totals"), caption = "2x2 contingency table",align = 'c', table.attr =  'style= "line-height:3ch;"') %>% 
+  kable_classic(html_font = "Cambria", font_size=16) %>% 
+  collapse_rows(columns=1) %>% add_header_above(c("","", "Disease" =2, "")) %>% footnote(c("Sensitivity = TP/(TP+FN),   Specificity=TN/(FP+TN)", "Positive Predicitve Value=TP/(TP+FP),  Negative Predictive Value=TN/(TN+FN)"), general_title ="" )
+```
+
+<ul class='matched' style="list-style: none; padding-left: 0;">
+<li>The sensitivity reports how accurate the test was at identifying a true case.</li>
+<li>The specificity is how good the test was at correctly identifying those without disease. </li>
+<li>The positive predictive value (PPV) is how good the test is at identifying case (e.g. for all positive tests, how likely is it that an individual has the disease). </li>
+<li>The negative predictive value (NPV) is how good a test is at ruling out disease (e.g. for all negative tests, how likely is it that an individual has no disease).  </li>
+</ul>
+
+Importantly, the way data is recorded in the two-by-two table is important, especially if using functions to calculate these values. 
+
+
+As example, we can look at the effects of mothers smoking on delivery of babies under 2.5 kg (low birth weights). In the `birthwt` dataset there is a categorical terms for birth weight less than 2.5 kg (`low`) and smoking status during pregnancy (`smoke`).
+
+```{r}
+bwt <- MASS::birthwt # load data
+bwt.cont<- table(bwt$smoke, bwt$low, dnn =c("Smoke", "Low BW")) # frquency of events 0=no, 1=yes
+
+## the epiR functions require a particular order (e.g. first column is outcome positive, first row is expsoure positive)
+bwt.cont <- bwt.cont[2:1,2:1]
+```
+
+```{r bwt2by2, echo=F}
+data.frame(C1=rep('Smoking',2), C2 = c("Yes","No"), plus=c('30', '29'), minus=c('44', '86')) %>%
+kbl(col.names=c("","", "Yes", "No"),caption = "Frequency of low birth weight and mother smoking status",align = 'c', table.attr =  'style= "width: 45%;"') %>%
+    kable_classic(html_font = "Cambria", font_size=16) %>% 
+  collapse_rows(columns=1) %>% add_header_above(c("","", "Low birth weight (<2.5kg)" =2)) 
+
+```
+
+The odd of having low birth rate give a mother smoked during pregnancy can be easily calculated as:
+<hr>
+$$\begin{gather*}
+\frac{\text{Odds of baby with a low birth weight was exposed to a mother smoking}}{\text{Odds that a baby born with healthy birth weight was exposed to a mother smoking}}\\
+ \frac{A/C}{B/D} = \frac{30/86}{44/29} = 2.02
+\end{gather*}$$
+<hr>
+ 
+Therefore, the odds of having a child with low birth weight a smokers is 2.02 times greater than the odds of having a child with low birth for non-smokers. Additionally, we can calculate the risk smoking (the expsoure) has on the outcome of low birth weight. The risk of low birth weight given smoking is 30/(30+44) and the risk of low birth weight given no smoking is 29/(29+86). The releative risk (or risk ratio) is the ratio of these two risk $ \frac{30/(30+44)}{29/(29+86)} = 1.61$. Therefore, smoking during pregnancy has a 1.61 greater risk of low birth weight childern. 
+
+To add more information it is important to determine the confidence intervals and significances. These, and the odd/risk ratios, can be calculated using functions built in to `r`. However, `epiR` and `epitools` are two commonly used packages that make this epidemiological type analyses easier.
+Each packages requires the data to be in a specific format, therefore get the references (vignettes) for each packages. For `epiR`, the function `epi.2by2()` needs a two-by-two table with the first column as of outcome positive and first row as exposure positive (Table \@ref(tab:2by2))
+
+
+```{r oddsRatio}
+epi.2by2(dat = bwt.cont, method="cohort.count", conf.level = .95)
+```
+
+# Chi-squared test
+The Chi-square test of independence determines whether there is a significant relationship between two categorical variables. The Chi-squared test compares the observed frequencies of events to the expected frequencies (under the assumption of no relationship between variables). 
+
+Taken the example above of birth weight and smoking in pregnancy (Table \@ref(tab:bwt2by2)), we can use the probabilities of each event occurring to calculate the expected events. For example, the probability that a women smoked during pregnancy is 0.392 (74/189) and the probability of a child being born of low birth weight is 0.312 (59/189). Under the assumption that the variables are independent, we can multiple these two probabilities and work the expected number of children born at low weight given a mother that smoked as $0.392 \times 0.312 \times n$. For our dataset of 189 individuals this works out to be ~23 event (Table \@ref(tab:expected)).
+
+
+```{r, expected, echo=F}
+data.frame(C1=rep('Smoking',2), C2 = c("Yes","Yes","No","No"), C3 = c("Obs","Exp", "Obs","Exp"), plus=c('30', '23.10', '29', '35.90'), minus=c('44','50.90', '86','79.10')) %>% kbl(col.names=c("","","", "Yes", "No"),caption = "Frequency of observed and exprected child born with low birth weight and smoking status of the mother",align = 'c', table.attr =  'style= "width: 60%;line-height: 3ch;"') %>%  kable_classic(html_font = "Cambria", font_size=16) %>% 
+  collapse_rows(columns=1:2) %>% add_header_above(c("","","", "Low birth weight (<2.5kg)" =2))
+```
+
+It is important to calculate the expected events as if the expected occurrence of any event is less than five than Chi-squared test are not recommended. 
+
+Given the expected values, we can now estimate the Chi-squared statistics.
+
+**Manually (Not recommended)**  
+
+$$\begin{gather*}
+\chi^2=\sum{\frac{(O-E)^2}{E}} \\
+\chi^2=\frac{(O-E)^2}{E} + \frac{(O-E)^2}{E} + \frac{(O-E)^2}{E} + \frac{(O-E)^2}{E} \\
+\chi^2=\frac{(30-23.10)^2}{23.10} + \frac{(29-35.90)^2}{35.90} + \frac{(44-50.90)^2}{50.90} + \frac{(86-79.10)^2}{79.10} \\
+\end{gather*}$$
+Where $\chi^2$ is the test statistic and $O$ and $E$ are the observed and expected frequencies, respectively. The degrees of freedom is calculated by $(r-1)(c-1)$ where r and c are the number levels for each variable, respectively. In this case the degress of freedom are 1, (2-1)(2-1).
+
+**R functions (Recommended)**  
+
+Instead of manually calculating this all, `r` has a built in `chisq.test()` function or we can use the previously described function `epi.2by2()`.
+
+```{r chisq}
+chisq.test(bwt.cont, correct = F)
+## Too inspect the expected values
+chisq.test(bwt.cont, correct = F)$expected
+```
+
+
+# Receiver operating characteristic (ROC) curves
+ROC curves are a simple way to inspect the relationship between sensitivity and specificity for every possible cut-off for a test/model. The area under the curve (AUC) of a ROC curve can be helpful to easily compare multiple different tests or models.
+
+To illustrate how ROC curves summarise the sensitivity & specificity lets inspect Figure \@ref(fig:ROCproBNP)A. The red line is the given cut-off (threshold) for the test (e.g. individuals above the red line would return a positive result). The two-by-two tables for each corresponding threshold can be seen in the tables below. To identify the optimal threshold it would be tedious generating two-by-two tables for each changing threshold. Instead we can generate a ROC curve (Figure \@ref(fig:ROCproBNP)B). The ROC curve corresponds to the each changing sensitivity and specificity as the threshold changes.
+
+To plot the ROC curve in `R` we can use the `pROC` package, of which there are several functions that can be used. I have used the `ggroc()` function as it generates plot similar in style to `ggplot`. 
+
+
+```{r exampleRoc, eval=F}
+# example of how to plot ROC curves
+## Load data important to detect dates
+dat = read.xlsx("../Data/ROCdat.xlsx", sheet = 1, detectDates = T)
+## Calculate age (round-down to nearest year). -- Date.ofBirth wasn't detected as a date on import
+dat$Age <- as.numeric(floor((dat$Baseline_Date - as.Date(dat$Date.of.Birth, "%d/%m/%Y")) /365.25))
+
+## filter out missing data
+# unsure what -1 is...
+dat = dat %>% filter(EDNTpBNP > -1 & !is.na(GSDia1HF_New_At))
+
+roc1=roc(dat$GSDia1HF_New_At, dat$EDNTpBNP)
+ggroc(roc1)
+
+# similar to ggplot aesthetics can be altered.
+
+```
+
+## Determining threshold
+
+To determine the optimal threshold for a given test greatly depends on the objective of the test. For example, if designing a rule-out test (e.g. Negatives are truly negatives) than there is a priority to have high specificity that may come at expense of sensitivity. In general, there are some statistics we can use to help pick the best threshold.
+
+<ol class='matched'>
+<li>At the simpliest level, we can compare means/medians between individuals with and without disease.</li>
+<li>The Youden statistic can be used which will give us the threshod at which sensitivity + specificity is the greatest.</li>
+<li>Or take the top left most value, this is calculated by the smallest value of $(1-sensitvity)^2 +(1-specificity)^2$</li>
+</ol>
+
+Additionally, weights can be used if false positive and false negative predictions are not equivalent (e.g. rule-in or out test are more important). 
+
+To extract these values the `coords` function from `pROC` can be used. The reference page `?pROC::coords` has more details. 
+```{r coords, eval=F}
+## Examples of how to extract 'best' threshold 
+# determine Youdens statistic
+coords(roc1, best.method = "youden", 'best')
+
+# threshold at the point closest to the top-left part of the plot
+coords(roc1, best.method = "closest.topleft", 'best')
+
+```
+
+```{r ROCproBNP, fig.cap="A) The impact of proBNP thresholds on the classification of individiuals with and without heart failues (HF). Individuals about the thresholds (red line) would return a positive result. B) ROC curve for proBNP levels and heart failure diagnosis with Youden statistic and value it top-left most corner.", message=F, echo=F}
+## Load data important to detect dates
+dat = read.xlsx("../Data/ROCdat.xlsx", sheet = 1, detectDates = T)
+## Calculate age (round-down to nearest year). -- Date.ofBirth wasn't detected as a date on import
+dat$Age <- as.numeric(floor((dat$Baseline_Date - as.Date(dat$Date.of.Birth, "%d/%m/%Y")) /365.25))
+
+## filter out missing data
+# unsure what -1 is...
+dat = dat %>% filter(EDNTpBNP > -1 & !is.na(GSDia1HF_New_At))
+
+t.size = 8
+
+p1<-ggplot(dat, aes(x=GSDia1HF_New_At, y= EDNTpBNP )) + geom_point() + geom_hline(yintercept = 10090, color='red') + theme_bw() + xlab("HF") + 
+  ggtitle("Threshold = 10000")+ theme(plot.title = element_text(size = t.size)) +ylab('NT-proBNP (pg/mL)')
+p2<-ggplot(dat, aes(x=GSDia1HF_New_At, y= EDNTpBNP )) + geom_point() + geom_hline(yintercept = 5920, color= 'red') +theme_bw()+ xlab("HF")+ 
+  ggtitle("Threshold = 5900")+ theme(plot.title = element_text(size = t.size))+ylab('NT-proBNP (pg/mL)')
+p3<-ggplot(dat, aes(x=GSDia1HF_New_At, y= EDNTpBNP )) + geom_point() + geom_hline(yintercept = 4280, color= 'red') +theme_bw()+ xlab("HF")+ 
+  ggtitle("Threshold = 4280")+ theme(plot.title = element_text(size = t.size))+ylab('NT-proBNP (pg/mL)')
+p4<-ggplot(dat, aes(x=GSDia1HF_New_At, y= EDNTpBNP )) + geom_point() + geom_hline(yintercept = 1926, color= 'red') +theme_bw()+ xlab("HF")+ 
+  ggtitle("Threshold = 1900")+ theme(plot.title = element_text(size = t.size))+ylab('NT-proBNP (pg/mL)')
+
+roc1=roc(dat$GSDia1HF_New_At, dat$EDNTpBNP)
+youden= coords(roc1, best.method = "youden", 'best') %>% mutate(label=paste(round(threshold,3), " (", round(specificity,3), ", ", round(sensitivity,3), ")", sep=""))
+tl = coords(roc1, best.method = "t", 'best') %>% mutate(label=paste(round(threshold,3), " (", round(specificity,3), ", ", round(sensitivity,3), ")", sep=""))
+
+
+y.tl = rbind(youden,tl)
+y.tl$name = c('Youden','Topleft') 
+
+p5<-ggroc(roc1, size=1) + theme_bw() +
+  geom_point(data=y.tl, aes(x=specificity, y=sensitivity, color=name), size=3) + 
+  geom_text(data=y.tl, aes(x=specificity, y=sensitivity, label = label, color=name), nudge_x= .2, nudge_y = -.035,show.legend = FALSE)+
+  scale_color_manual(values=c('red','black')) + theme(legend.title = element_blank())
+
+top <- plot_grid(p1,p2,p3,p4, nrow=1)
+plot_grid(top, p5, nrow=2, rel_heights = c(1,1.5), labels=LETTERS[1:2])
+```
+
+
+
+```{r ROCproBNP2, echo=F, results='asis',  message=F, comment=F, warning=F, fig.cap="Contingency table corresponding to Figure 1A"}
+
+tmp <- dat
+tmp$GSDia1HF_New_At <- factor(tmp$GSDia1HF_New_At, levels =c("Y","N"))
+
+threshold = c(10090, 5920,4280,1926)
+title = "Threshold at"
+pos=c('float_left', "float_left", "float_right", 'float_right')
+lst=list()
+for(i in 1:4){
+  lst[[i]] = as.data.frame.matrix(table(tmp$GSDia1HF_New_At, tmp$EDNTpBNP < threshold[i])) %>% rownames_to_column()%>% 
+  add_column(c("HF","HF"),.before="rowname") %>% kbl(col.names=c("","","Y","N"), table.attr =  'style= "width: 23%;"') %>% 
+  kable_classic(html_font = "Cambria", font_size=14, position=pos[i],full_width=T) %>% 
+  collapse_rows(columns=1) %>% add_header_above(c("", "","proBNP"=2)) 
+}
+
+cat('<p class=caption style="font-size: initial !important;color: #222222; text-align: center;font-family: Cambria;" id="tab:ROCproBNP2"> Table: Contingency table corresponding to Figure 1A </p>')
+
+print(lst[[1]] %>% add_header_above(c("Threshold cutoff= 10090"=4)))
+print(lst[[2]]%>% add_header_above(c("Threshold cutoff= 5920"=4)))
+print(lst[[3]]%>% add_header_above(c("Threshold cutoff= 4280"=4)))
+print(lst[[4]]%>% add_header_above(c("Threshold cutoff= 1926"=4)))
+
+```
+
+<div style="clear: both"></div>
+<br>
+
+## Comparing ROC curves
+
+The normal level of NT-proBNP does vary over age with the normal range increasing for over 75 year olds (Table \@ref(tab:NormalproBNP)). Therefore, it is sensible to adjust the threshold for the test based on age brackets. We can also test how well each test performs in general by comparing the AUC, this can be misleading, as there may little differences at the thresholds chosen. In this case, proBNP categorise individuals under 75 significantly better than over 75 years old (p=0.015).
+
+```{r NormalproBNP, echo=F}
+nor <- data.frame(Age=c("0-50", "50-74", "75+"), Normal = c("< 125", "< 125", "< 450"), HF= c("> 450", "> 900", "> 900"))
+kbl(nor, col.names=c("Age","Normal (pg/mL)","HF (pg/mL)"), caption = "NT-proBNP normal-range and heart failure across age") %>% kable_classic(html_font = "Cambria", font_size=14)
+
+```
+
+
+```{r proBNPage, echo=F, message=F, fig.cap="Comparison of diagnostic potential of proBNP in individuals over 75 compared to under 75."}
+roc2<-roc(dat$"GSDia1HF_New_At"[dat$Age < 75],dat$"EDNTpBNP"[dat$Age < 75])
+roc3<-roc(dat$"GSDia1HF_New_At"[dat$Age >= 75],dat$"EDNTpBNP"[dat$Age >= 75])
+
+## Calculate Youden
+youden2 = coords(roc2, best.method = "youden", 'best') %>% mutate(label=paste(round(threshold,3), " (", round(specificity,3), ", ", round(sensitivity,3), ")", sep=""))
+youden3 = coords(roc3, best.method = "youden", 'best') %>% mutate(label=paste(round(threshold,3), " (", round(specificity,3), ", ", round(sensitivity,3), ")", sep=""))
+youden2 = rbind(youden2,youden3)
+youden2$name = 'Youden' 
+
+
+## Calculate TopLeft
+tl2 = coords(roc2, best.method = "t", 'best') %>% mutate(label=paste(round(threshold,3), " (", round(specificity,3), ", ", round(sensitivity,3), ")", sep=""))
+tl3 = coords(roc3, best.method = "t", 'best') %>% mutate(label=paste(round(threshold,3), " (", round(specificity,3), ", ", round(sensitivity,3), ")", sep=""))
+tl2 = rbind(tl2,tl3)
+tl2$name = 'TopLeft' 
+
+points <- rbind(youden2,tl2)
+points$col = rep(c('blue','orange'),each=2)
+
+## Generate AUC
+AUC = data.frame(AUC=paste(c("< 75","> 75"),"AUC ", c(round(auc(roc2),3),round(auc(roc3),3))))
+AUC$AUC.x = .15
+AUC$AUC.y = c(.05,.1)
+AUC$name =c("x","y")
+
+my_col=c(x='black',y='red', Youden="blue", TopLeft="orange")
+ggroc(list(x=roc2,y=roc3), show.legend=F, size=1) + theme_bw() +
+  geom_text(data=AUC,aes(x=AUC.x, y=AUC.y, label = AUC), show.legend = F) +
+  geom_point(data=points, aes(x=specificity, y=sensitivity,color=name),size=3) +
+  geom_text(data=points,aes(x=specificity, y=sensitivity, label = label), nudge_x= .15, nudge_y = -.025, show.legend = F) +
+  scale_color_manual(values=my_col,breaks=c('Youden','TopLeft')) +theme(legend.title=element_blank())
+```
+
+
+```{r roc.test}
+
+roc.test(roc2,roc3)
+
+```

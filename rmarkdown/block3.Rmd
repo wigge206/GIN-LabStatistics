@@ -1,0 +1,89 @@
+---
+title: "Regression"
+output:
+  bookdown::html_document2:
+    toc: true
+    toc_float: true
+    toc_collapsed: true
+    toc_depth: 3
+    number_sections: false
+    theme: lumen
+    css: www/css/master.css
+    highlight: default
+    fig_caption: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, comment=NA, fig.align = 'center')
+```
+
+
+```{r datasets, results='hide',error=FALSE, warning=FALSE, message=FALSE,echo=F}
+## Read excelsheets
+library(openxlsx)
+
+## Packages used for 'data wrangling'
+library(tidyverse)
+library(data.table)
+
+## Extra stats package
+library(rstatix) ## used to help format stats into dfs for ggplot
+library(DescTools) ## For Dunnett's test
+library(epitools)
+library(epiR)
+library(mlbench)
+library(pROC) ## For ROC curves
+
+## Packages for plotting and table outputs
+library(ggplot2)
+library(ggsci)
+library(ggpubr)
+library(ggrepel)
+library(cowplot)
+library(kableExtra) ## used for to make nicer looking tables
+```
+
+
+```{r global_functions, echo=FALSE}
+bxplot <- function(...){ggplot(...)+geom_boxplot(width=0.4, size=1, fatten=1, colour="grey70") +
+  geom_point(colour="steelblue", size=1.2, alpha=0.5) +
+  theme_bw(base_size=14)}
+
+p.siginf<- function(vec){
+  out<-c()
+  for(i in 1:length(vec)){
+    if(vec[i] < 0.001){
+      out <- c(out, "***")
+    }else if( vec[i] < 0.01){
+      out <- c(out, "**")
+    } else if(vec[i] <0.05){
+      out <- c(out, "*")
+    }else{
+      out <- c(out, "ns")
+    }
+  }     
+  return(out)
+}
+```
+
+
+
+# Logistic Regression
+
+Logistic regression is a method used to model binary outcomes. In R logistic regression is a generalised linear model and can be implemented with the `glm()` function. The `glm()` funciton has many types of models, to use logistic regression the `family` options should be set to `'binomial'` (e.g. `glm(response variable ~ predictor variables,family='binomial', data=df)`). 
+
+```{r}
+data("PimaIndiansDiabetes2")
+Diabetes<- na.omit(PimaIndiansDiabetes2) # remove missing data
+#levels(Diabetes$diabetes) <- 0:1 # relabel neg and pos to 0 and 1
+
+## Fitting logistic regression predicted by all variables 
+model1 <- glm (diabetes~., data=Diabetes, family = 'binomial')
+## not the period tells R to use all columns other than diabetes. This is the same as
+##  glm(diabetes ~ pregnant + glucose + pressure + triceps + insulin + mass + pedigree + age ,data=Diabetes, family = 'binomial')
+
+summary(model1)
+```
+
+The summary depicts the estimate weight each term has on the prediction of diabetes. For example, with every increase unit increase of glucose will increase the log odds of diabetes by 0.036. 
+
