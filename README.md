@@ -11,6 +11,7 @@ The best way to utlisie the material is copy a version of repository locally.
 ## R code	
 Once local and folder decompressed open the lab_stats.html. There are serval pages you can navigate to see examples of how to use R to perform statistically analyses and generate plots/tables. 
 For the 'raw' R code these are avaliable as R scripts in the R folder, additionally the Rmd files show the code used to generate the markdown documents and includes all the R code. 
+
 	- Note there is a lot of other bits in these folder including some CSS and HTML code used to generate the html files.
 	- Caution: The Rscripts are untested, if all packages are installed the only issues will be the paths.  
 
