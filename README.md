@@ -15,7 +15,7 @@ For the 'raw' R code these are avaliable as R scripts in the R folder, additiona
 	- Caution: The Rscripts are untested, if all packages are installed the only issues will be the paths.  
 
 ## Presentation
-I have uploaded the PowerPoint presentation given by John Pearson in Presentation/
+I have uploaded the PowerPoint presentation given by John Pearson in `Presentation/`
 
 ## Excel
 There is some data set stored in excel sheets, also there is some excel sheet that have some statistical analyses, these were performed by John.
